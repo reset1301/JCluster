@@ -60,7 +60,7 @@ public class TCPServer {
                 String response = new Handler().handleMessage(data);
                 final int lengthMessage = String.valueOf(response).getBytes().length;
                 outputStream.write(String.valueOf(response).getBytes());
-                log.info("Response from Node: " + response);
+                log.info("Отправляю сообщение: " + response);
             } catch (Exception e) {
                 log.info("Current client disconnected");
                 log.info(e.toString());

@@ -5,12 +5,13 @@ import org.springframework.stereotype.Component;
 import ru.rrr.client.TCPClient;
 import ru.rrr.server.TCPServer;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
 @Data
-public class Node {
+public class Node implements Serializable {
     private int countClients = 0;
     private TCPServer server = new TCPServer();
     private List<TCPClient> clients = new ArrayList<>();

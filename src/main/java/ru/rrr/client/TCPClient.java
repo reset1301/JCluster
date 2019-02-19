@@ -1,5 +1,6 @@
 package ru.rrr.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -16,8 +17,11 @@ import java.util.concurrent.TimeUnit;
 public class TCPClient {
     private int port;
     private String ip;
+    @JsonIgnore
     private Socket socket = null;
-    private Integer reconnectTimeout = 10000; // как часто пытаемся переподключиться
+    @Value("${node.reconnect.timeout}")
+    @JsonIgnore
+    private Integer reconnectTimeout;
 
     @PostConstruct
     public void init() {

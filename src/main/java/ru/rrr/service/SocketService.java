@@ -1,11 +1,12 @@
 package ru.rrr.service;
 
 import lombok.Cleanup;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import ru.rrr.client.TCPClient;
 import ru.rrr.model.Node;
 
@@ -17,12 +18,12 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
+@Service
 @Slf4j
-@Scope("singleton")
-public class ClientSocketFactory {
+@Data
+public class SocketService {
     @Value("${cluster.port}")
-    Integer[] ports;
+    String[] ports;
     @Value("${cluster.ip}")
     String[] ips;
     List<Node> nodes = new ArrayList<>();
@@ -33,14 +34,14 @@ public class ClientSocketFactory {
             Node node = new Node();
             int finalI = i;
             new Thread(() -> {
-                node.startServer(ports[finalI]);
+                node.startServer(Integer.parseInt(ports[finalI]));
             }).start();
 
             for (int j = 0; j < ips.length; j++) {
                 if (i == j) {
                     continue;
                 }
-                TCPClient client = new TCPClient(ips[j], ports[j]);
+                TCPClient client = new TCPClient(ips[j], Integer.parseInt(ports[j]));
                 node.getClients().add(client);
             }
             node.connectToServers();
@@ -48,7 +49,7 @@ public class ClientSocketFactory {
         }
     }
 
-    @Scheduled(fixedRateString = "15000")
+    @Scheduled(fixedRateString = "${cluster.check.status.timeout}")
     public void ping() {
         log.info("Запущена проверка статусов.");
         String message = "PING";
