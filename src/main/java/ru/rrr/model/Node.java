@@ -7,11 +7,11 @@ import ru.rrr.server.TCPServer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 @Component
 @Data
 public class Node {
+    private int countClients = 0;
     private TCPServer server = new TCPServer();
     private List<TCPClient> clients = new ArrayList<>();
 

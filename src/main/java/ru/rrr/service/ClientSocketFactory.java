@@ -2,9 +2,7 @@ package ru.rrr.service;
 
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Scope;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,8 +21,6 @@ import java.util.List;
 @Slf4j
 @Scope("singleton")
 public class ClientSocketFactory {
-    @Autowired
-    private ApplicationEventPublisher publisher;
     @Value("${cluster.port}")
     Integer[] ports;
     @Value("${cluster.ip}")
@@ -52,22 +48,25 @@ public class ClientSocketFactory {
         }
     }
 
-    @Scheduled(fixedRateString = "3000")
+    @Scheduled(fixedRateString = "15000")
     public void ping() {
+        log.info("Запущена проверка статусов.");
         String message = "PING";
         byte[] messageBytes = message.getBytes();
-        for (Node node : nodes) {
-            for (TCPClient client : node.getClients()) {
+        nodes.forEach(node -> {
+            log.warn("Клиентов на предыдущей итерации: {}", node.getCountClients() + 1);
+            node.setCountClients(0);
+            node.getClients().forEach(client -> {
                 try {
                     new Thread(() -> {
                         try {
                             InputStream inputStream = client.getSocket().getInputStream();
-                            handleMessageReceive(inputStream);
+                            node.setCountClients(node.getCountClients() + handleMessageReceive(inputStream));
                         } catch (IOException e) {
                             log.error(e.getMessage());
                         }
                     }).start();
-                    log.info("Посылаю сообщение слушателю сокета: \n" + message);
+                    log.info("Посылаю сообщение слушателю сокета: " + message);
                     DataOutputStream dataOutputStream = new DataOutputStream(client.getSocket().getOutputStream());
                     dataOutputStream.write(messageBytes);
                     log.info("Сообщение отправлено получателю.");
@@ -75,13 +74,11 @@ public class ClientSocketFactory {
                     log.error("Ошибка отправки: " + e.getMessage());
                     client.reconnect();
                 }
-            }
-
-        }
-
+            });
+        });
     }
 
-    private void handleMessageReceive(InputStream inputStream) throws IOException {
+    private int handleMessageReceive(InputStream inputStream) throws IOException {
         String receivedMessage = "";
         @Cleanup ByteArrayOutputStream baos = new ByteArrayOutputStream();
         int size = 13 * 1024;
@@ -98,7 +95,7 @@ public class ClientSocketFactory {
         receivedMessage = new String(baos.toByteArray(), "UTF-8");
         log.info("Получено сообщение: {}", receivedMessage);
 
-        this.publisher.publishEvent(receivedMessage);
+        return receivedMessage.equalsIgnoreCase("PONG") ? 1 : 0;
     }
 }
 
