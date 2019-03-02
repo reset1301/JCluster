@@ -11,16 +11,18 @@ import java.util.List;
 
 @Component
 @Data
-public class Node implements Serializable {
+public class Node  {
     private int countClients = 0;
     private TCPServer server = new TCPServer();
     private List<TCPClient> clients = new ArrayList<>();
+
+
 
     public void startServer(int port) {
         server.startServer(port);
     }
 
-    public void connectToServers() {
-        clients.forEach(client -> new Thread(client::reconnect).start());
-    }
+//    public void connectToServers() {
+//        clients.forEach(client -> new Thread(client::reconnect).start());
+//    }
 }

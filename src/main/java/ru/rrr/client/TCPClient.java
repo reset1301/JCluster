@@ -2,83 +2,57 @@ package ru.rrr.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Data
-public class TCPClient {
-    private int port;
-    private String ip;
+public class TCPClient implements AutoCloseable {
+    private final int port;
+    private final String ip;
     @JsonIgnore
     private Socket socket = null;
     @Value("${node.reconnect.timeout}")
     @JsonIgnore
     private Integer reconnectTimeout;
 
-    @PostConstruct
-    public void init() {
-    }
-
-    public TCPClient( String ip,int port) {
+    public TCPClient(String ip, int port) {
         this.port = port;
         this.ip = ip;
-    }
-
-    /**
-     * Коннектится к серверам до скончания времен
-     *
-     */
-    @SneakyThrows
-    public void reconnect() {
-        boolean connected = this.connect();
-        if (!connected) {
-            TimeUnit.MILLISECONDS.sleep(reconnectTimeout);
-            reconnect();
-            return;
-        }
-
-        log.info("Успешное подключение к серверу - " + ip + ":" + port);
 
     }
 
     public Socket getSocket() {
-        if (this.socket == null) {
-            init();
-            return this.socket;
-        }
         return this.socket;
     }
 
-    public void closeSocket() {
+    /**
+     * Подключается к серверному сокету
+     *
+     * @return
+     */
+    public boolean connect() {
+        log.info("Попытка подключения к серверу {}:{}", ip, port);
+        try {
+            socket = new Socket(ip, port);
+            log.info("Успешное подключение к серверу - {}:{}", ip, port);
+        } catch (Exception e) {
+            log.warn("Не удалось подключиться к серверу " + ip + ":" + port + "", e);
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public void close() {
         try {
             getSocket().close();
         } catch (IOException e) {
             log.error(e.getMessage());
         }
-    }
-
-    /**
-     * Производит одну попытку подключения
-     *
-     * @return
-     */
-    public boolean connect() {
-        try {
-            socket = new Socket(ip, port);
-        } catch (
-          Exception e) {
-            log.warn(e.getMessage());
-            return false;
-        }
-
-        return true;
     }
 }

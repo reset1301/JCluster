@@ -1,13 +1,13 @@
 cluster:
-  ip: localhost, localhost
-  port: 4441, 4442
+  URI: localhost:4441, localhost:4442
   check:
     status:
       timeout: 15000
 
 node:
   reconnect:
-    timeout: 10000 # как часто пытаемся переподключиться
+    # РєР°Рє С‡Р°СЃС‚Рѕ РїС‹С‚Р°РµРјСЃСЏ РїРµСЂРµРїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ
+    timeout: 10000
 
 server:
   port: 8888
