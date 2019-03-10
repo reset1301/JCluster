@@ -37,6 +37,12 @@ public class NodeConfig {
      */
     private Collection<NodeUri> members;
 
+    /**
+     * Порт по умолчанию, на котором стартует нода
+     */
+    private int port;
+    private String clusterName;
+
     public NodeConfig() {
     }
 
@@ -45,6 +51,10 @@ public class NodeConfig {
         try (InputStream is = this.getClass().getClassLoader().getResourceAsStream(configPath)) {
             properties.load(is);
         }
+
+        this.port = Integer.valueOf(properties.getProperty("port"));
+        this.clusterName = properties.getProperty("cluster-name");
+
         final String membersURI = properties.getProperty("members");
         if (membersURI == null || membersURI.isEmpty()) {
             throw new NodeConfigException("Property 'members' is required, but not found. " +
@@ -55,12 +65,21 @@ public class NodeConfig {
 
         final String[] split = membersURI.split(",");
         for (String uri : split) {
+            final NodeUri nodeUri = new NodeUri();
             final String[] uriSplit = uri.trim().split(":");
-            if (uriSplit.length < 2) {
-                throw new NodeConfigException("Incorrect members URI format. URI must match the 'host:port' pattern");
+            switch (uriSplit.length) {
+                case 1:
+                    nodeUri.setHost(uriSplit[0]);
+                    break;
+                case 2:
+                    nodeUri.setPort(Integer.valueOf(uriSplit[1]));
+                    break;
+                default:
+                    throw new NodeConfigException("Incorrect members URI format. " +
+                            "URI must match the 'host:port' or 'host' pattern");
             }
 
-            this.members.add(new NodeUri(uriSplit[0], Integer.valueOf(uriSplit[1])));
+            this.members.add(new NodeUri(uriSplit[0], uriSplit.length > 1 ? Integer.valueOf(uriSplit[1]) : 0));
 
             this.connectionTimeoutSeconds = Integer.valueOf(properties.getProperty("connection-timeout-seconds",
                     String.valueOf(CONNECTION_TIMEOUT_DEFAULT)));
@@ -91,5 +110,13 @@ public class NodeConfig {
 
     public void setNodesDiscoverPeriod(int nodesDiscoverPeriod) {
         this.nodesDiscoverPeriod = nodesDiscoverPeriod;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public String getClusterName() {
+        return clusterName;
     }
 }
