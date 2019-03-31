@@ -53,7 +53,7 @@ public class TcpClient implements AutoCloseable {
         log.debug("Node [{}]. Attempt to connect to server {}:{}", uuid, host, port);
         Socket socket = new Socket(host, port);
         Connection result = new Connection(socket);
-        log.info("Node [{}]. Successful result to server {}:{}", uuid, host, port);
+        log.info("Node [{}]. Successful connect to server {}:{}", uuid, host, port);
         return result;
     }
 
@@ -79,6 +79,7 @@ public class TcpClient implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Node [{}]. Close client {}:{}", uuid, host, port);
         if (this.connection != null) {
             try {
                 connection.close();

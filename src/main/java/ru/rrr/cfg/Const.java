@@ -6,4 +6,8 @@ public interface Const {
 
     int SEND_MESSAGE_TIMEOUT = 10;
     int NODE_DISCOVER_PERIOD = 1;
+    /**
+     * Таймаут соединения в секундах по умолчанию
+     */
+    int CONNECTION_TIMEOUT_DEFAULT = 30;
 }

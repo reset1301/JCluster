@@ -5,6 +5,9 @@ import ru.rrr.cfg.Const;
 import ru.rrr.cfg.NodeConfig;
 import ru.rrr.cfg.NodeConfigException;
 import ru.rrr.cfg.NodeUri;
+import ru.rrr.cluster.event.ClusterEvent;
+import ru.rrr.cluster.event.ClusterEventListener;
+import ru.rrr.cluster.event.MemberDescription;
 import ru.rrr.model.Message;
 import ru.rrr.model.MessageType;
 import ru.rrr.tcp.NetworkExchangeException;
@@ -26,6 +29,8 @@ public class Node {
     private TcpServer server;
     private Map<String, TcpClient> clients = new HashMap<>();
 
+    private List<ClusterEventListener> clusterEventListeners = new ArrayList<>();
+
     private String address;
     private int port;
     private String clusterName;
@@ -33,14 +38,21 @@ public class Node {
     private final String uuid = UUID.randomUUID().toString();
 
     private final ScheduledExecutorService discoverExecutor = Executors.newScheduledThreadPool(1);
+    private final int sendMessageTimeout;
 
     public Node(NodeConfig config) throws NodeConfigException, IOException {
         this.port = config.getPort();
         this.clusterName = config.getClusterName();
 
+        initListeners();
+
+        // TODO: 31.03.2019 этот параметр должен инициализироваться из конфига, или константой, если в конфиге не задан
+        this.sendMessageTimeout = Const.SEND_MESSAGE_TIMEOUT;
+
         log.info("Node [{}]. Start in cluster '{}'", uuid, clusterName);
 
         this.server = new TcpServer(port, uuid, clusterName);
+        this.port = server.getPort();
 
         final Collection<NodeUri> members = config.getMembers();
         if (members.size() < 1) {
@@ -54,7 +66,32 @@ public class Node {
                             config.getConnectionTimeoutSeconds()),
                     0, Const.NODE_DISCOVER_PERIOD, TimeUnit.SECONDS);
         }
+    }
 
+    /**
+     * Настройка слушателей событий кластера
+     */
+    private void initListeners() {
+        this.clusterEventListeners.add(new ClusterEventListener() {
+            @Override
+            public void onClusterEvent(ClusterEvent event) {
+                printMembersList();
+            }
+
+            @Override
+            public void onMemberAdd(MemberDescription memberDescription) {
+                printMembersList();
+            }
+
+            @Override
+            public void onMemberRemove(MemberDescription memberDescription) {
+                printMembersList();
+            }
+        });
+    }
+
+    public void addClusterEventListener(ClusterEventListener listener) {
+        this.clusterEventListeners.add(listener);
     }
 
     /**
@@ -72,39 +109,85 @@ public class Node {
             TcpClient client = new TcpClient(host, currentPort, uuid, connectionTimeout, reconnectTimeout);
             if (!client.isConnected()) {
 //                client.close();
+                // TODO: 31.03.2019 это надо как-то обрабатывать
                 continue;
             }
             try {
                 // Фильтр
                 final Message messageGetUUID = client
-                        .sendMessage(new Message(MessageType.GET_UUID), Const.SEND_MESSAGE_TIMEOUT);
+                        .sendMessage(new Message(MessageType.GET_UUID), sendMessageTimeout);
                 final String currentUUID = messageGetUUID.getData();
                 if (clients.containsKey(currentUUID)) {
                     // Ранее обнаруженные ноды игнорируем
                     continue;
                 }
                 if (this.uuid.equals(currentUUID)) {
-                    client.close();
+                    this.address = client.getHost();
+                    printMembersList();
+                    closeSelfConnection(client);
+                    continue;
                 } else {
                     final Message messageClusterName = client
                             .sendMessage(new Message(MessageType.GET_CLUSTER_NAME), Const.SEND_MESSAGE_TIMEOUT);
-                    final String currentClusterName = messageClusterName
-                            .getData();
+                    final String currentClusterName = messageClusterName.getData();
                     if (!this.clusterName.equals(currentClusterName)) {
-                        client.close();
+                        closeOtherClusterConnection(client, currentClusterName);
                         continue;
                     }
                 }
 
                 log.debug("New node detected: {}:{}", host, currentPort);
                 // Если это другая нода из нашего кластера, то добавляем ее в коллекцию нод
-                this.clients.put(currentUUID, client);
-                printMembersList();
+                addNewClient(currentUUID, client);
             } catch (NetworkExchangeException e) {
                 client.close();
                 log.error("Failed to get a reply to the message", e);
             }
 
+        }
+    }
+
+    /**
+     * Добавляет новую ноду в кластер
+     *
+     * @param uuid   идентификатор ноды
+     * @param client клиент
+     */
+    private void addNewClient(String uuid, TcpClient client) {
+        for (ClusterEventListener listener : clusterEventListeners) {
+            listener.onMemberAdd(new MemberDescription(uuid, client.getHost(), client.getPort()));
+        }
+        this.clients.put(uuid, client);
+        printMembersList();
+    }
+
+    /**
+     * Закрывает соединение ноды к самой себе
+     *
+     * @param client клиент
+     * @throws NetworkExchangeException
+     */
+    private void closeSelfConnection(TcpClient client) throws NetworkExchangeException {
+        // Закрываем соединение с самим собой
+        log.info("Node [{}] found itself. This connection will be closed.", uuid);
+        client.sendMessage(new Message(MessageType.CLOSE_CONNECTION), Const.SEND_MESSAGE_TIMEOUT);
+        if (client.isConnected()) {
+            client.close();
+        }
+    }
+
+    /**
+     * Закрывает соединение ноды к серверу из чужого кластера
+     *
+     * @param client         клиент
+     * @param anotherCluster
+     * @throws NetworkExchangeException
+     */
+    private void closeOtherClusterConnection(TcpClient client, String anotherCluster) throws NetworkExchangeException {
+        log.info("Discovered a node from another cluster '{}'. The connection will be closed.", anotherCluster);
+        client.sendMessage(new Message(MessageType.CLOSE_CONNECTION), Const.SEND_MESSAGE_TIMEOUT);
+        if (client.isConnected()) {
+            client.close();
         }
     }
 
@@ -138,14 +221,11 @@ public class Node {
      * Выводит в лог текущий состав кластера: список нод
      */
     private void printMembersList() {
-        StringBuilder message = new StringBuilder("members: [\n");
+        StringBuilder message = new StringBuilder("Node [" + uuid + "]. members: [\n");
         List<String> membersList = new ArrayList<>();
+        membersList.add(String.format("uuid: %s\t[%s:%d]\t-\tthis", uuid, this.address, this.port));
         clients.forEach((uuid, client) -> {
-            String member = String.format("uuid: %s\t[%s:%d]", uuid, client.getHost(), client.getPort());
-            if (this.uuid.equals(uuid)) {
-                member += "\t-\tthis";
-            }
-            membersList.add(member);
+            membersList.add(String.format("uuid: %s\t[%s:%d]", uuid, client.getHost(), client.getPort()));
         });
 
         final String join = String.join(",\n", membersList);

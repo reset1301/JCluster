@@ -11,10 +11,6 @@ import java.util.Properties;
  * Конфигурация ноды кластера
  */
 public class NodeConfig {
-    /**
-     * Таймаут соединения в секундах по умолчанию
-     */
-    private static final int CONNECTION_TIMEOUT_DEFAULT = 30;
 
     /**
      * Периодичность попыток переподключения к другим нодам
@@ -82,7 +78,7 @@ public class NodeConfig {
             this.members.add(new NodeUri(uriSplit[0], uriSplit.length > 1 ? Integer.valueOf(uriSplit[1]) : 0));
 
             this.connectionTimeoutSeconds = Integer.valueOf(properties.getProperty("connection-timeout-seconds",
-                    String.valueOf(CONNECTION_TIMEOUT_DEFAULT)));
+                    String.valueOf(Const.CONNECTION_TIMEOUT_DEFAULT)));
             this.nodesDiscoverPeriod = Integer.valueOf(properties.getProperty("nodes-discover-period-seconds",
                     String.valueOf(NODE_DISCOVER_PERIOD)));
         }
