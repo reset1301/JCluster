@@ -13,11 +13,6 @@ import java.util.Properties;
 public class NodeConfig {
 
     /**
-     * Периодичность попыток переподключения к другим нодам
-     */
-    private static final int NODE_DISCOVER_PERIOD = 5;
-
-    /**
      * Таймаут соединения с другими нодами кластера в секундах
      */
     private int connectionTimeoutSeconds;
@@ -29,6 +24,11 @@ public class NodeConfig {
     private int nodesDiscoverPeriod;
 
     /**
+     * Таймаут отправки сообщения с получением ответа
+     */
+    private int sendMessageTimeout;
+
+    /**
      * Список URI нод кластера
      */
     private Collection<NodeUri> members;
@@ -37,6 +37,13 @@ public class NodeConfig {
      * Порт по умолчанию, на котором стартует нода
      */
     private int port;
+    /**
+     * Диапазон портов, который надо сканировать
+     */
+    private int portsRangeEnd;
+    /**
+     * Имя кластера
+     */
     private String clusterName;
 
     public NodeConfig() {
@@ -79,8 +86,12 @@ public class NodeConfig {
 
             this.connectionTimeoutSeconds = Integer.valueOf(properties.getProperty("connection-timeout-seconds",
                     String.valueOf(Const.CONNECTION_TIMEOUT_DEFAULT)));
-            this.nodesDiscoverPeriod = Integer.valueOf(properties.getProperty("nodes-discover-period-seconds",
-                    String.valueOf(NODE_DISCOVER_PERIOD)));
+            this.nodesDiscoverPeriod = Integer.valueOf(
+                    properties.getProperty("nodes-discover-period-seconds", String.valueOf(Const.NODE_DISCOVER_PERIOD)));
+            this.sendMessageTimeout = Integer.valueOf(
+                    properties.getProperty("send-message-timeout", String.valueOf(Const.SEND_MESSAGE_TIMEOUT)));
+            this.portsRangeEnd = Integer
+                    .valueOf(properties.getProperty("ports-range-end", String.valueOf(Const.PORT_56635)));
         }
     }
 
@@ -100,6 +111,14 @@ public class NodeConfig {
         this.connectionTimeoutSeconds = connectionTimeoutSeconds;
     }
 
+    public int getSendMessageTimeout() {
+        return sendMessageTimeout;
+    }
+
+    public void setSendMessageTimeout(int sendMessageTimeout) {
+        this.sendMessageTimeout = sendMessageTimeout;
+    }
+
     public int getNodesDiscoverPeriod() {
         return nodesDiscoverPeriod;
     }
@@ -110,6 +129,14 @@ public class NodeConfig {
 
     public int getPort() {
         return port;
+    }
+
+    public int getPortsRangeEnd() {
+        return portsRangeEnd;
+    }
+
+    public void setPortsRangeEnd(int portsRangeEnd) {
+        this.portsRangeEnd = portsRangeEnd;
     }
 
     public String getClusterName() {

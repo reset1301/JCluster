@@ -1,5 +1,7 @@
 package ru.rrr.cluster.event;
 
+import ru.rrr.tcp.TcpClient;
+
 /**
  * Описание члена кластера
  */
@@ -14,6 +16,12 @@ public class MemberDescription {
         this.port = port;
     }
 
+    public MemberDescription(TcpClient tcpClient) {
+        this.uuid = tcpClient.getUuid();
+        this.host = tcpClient.getHost();
+        this.port = tcpClient.getPort();
+    }
+
     public String getUuid() {
         return uuid;
     }
@@ -24,5 +32,14 @@ public class MemberDescription {
 
     public int getPort() {
         return port;
+    }
+
+    @Override
+    public String toString() {
+        return "MemberDescription{" +
+                "uuid='" + uuid + '\'' +
+                ", host='" + host + '\'' +
+                ", port=" + port +
+                '}';
     }
 }

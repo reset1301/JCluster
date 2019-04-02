@@ -6,6 +6,9 @@ import org.junit.Test;
 import ru.rrr.cfg.NodeConfig;
 import ru.rrr.cfg.NodeConfigException;
 import ru.rrr.cluster.Node;
+import ru.rrr.cluster.event.ClusterEvent;
+import ru.rrr.cluster.event.ClusterEventListener;
+import ru.rrr.cluster.event.MemberDescription;
 import ru.rrr.model.Message;
 import ru.rrr.model.MessageType;
 import ru.rrr.tcp.Connection;
@@ -15,8 +18,10 @@ import ru.rrr.tcp.TcpServer;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertTrue;
 
@@ -33,15 +38,39 @@ public class AppTest {
         assertTrue(true);
     }
 
-    @Ignore
-    @Test
+    /**
+     * Тест старта нод и создания кластера
+     */
+//    @Ignore
+    @Test(timeout = 15000)
     public void testStartCluster() throws IOException, NodeConfigException, InterruptedException {
         final NodeConfig nodeConfig = new NodeConfig("cfg/ClusterConfig.properties");
-        final Node node = new Node(nodeConfig);
-        final Node node1 = new Node(nodeConfig);
-//        final Node node3 = new Node(nodeConfig);
 
-        TimeUnit.SECONDS.sleep(20);
+        CountDownLatch latch = new CountDownLatch(9);
+
+        ClusterEventListener clusterEventListener = new ClusterEventListener() {
+
+            @Override
+            public void onClusterEvent(ClusterEvent event) {
+
+            }
+
+            @Override
+            public void onMemberAdd(MemberDescription memberDescription) {
+                latch.countDown();
+            }
+        };
+
+        final Node node1 = new Node(nodeConfig);
+        node1.addClusterEventListener(clusterEventListener);
+        final Node node2 = new Node(nodeConfig);
+        node2.addClusterEventListener(clusterEventListener);
+        final Node node3 = new Node(nodeConfig);
+        node3.addClusterEventListener(clusterEventListener);
+
+        // TODO: 02.04.2019 Добавить ноды из другого кластера и проверить, что все ноды правильно нашли свои кластеры
+
+        latch.await(5, TimeUnit.SECONDS);
     }
 
     @Ignore
@@ -112,9 +141,7 @@ public class AppTest {
                     final Message receive = connection.receive();
                     log.info("Client: receive message: {}:{}", receive.getType(), receive.getData());
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (ClassNotFoundException e) {
+            } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
             }
         });

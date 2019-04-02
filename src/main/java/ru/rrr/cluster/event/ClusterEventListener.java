@@ -6,7 +6,7 @@ package ru.rrr.cluster.event;
 public interface ClusterEventListener {
     void onClusterEvent(ClusterEvent event);
 
-    void onMemberAdd(MemberDescription memberDescription);
+    default void onMemberAdd(MemberDescription memberDescription) {}
 
-    void onMemberRemove(MemberDescription memberDescription);
+    default void onMemberRemove(MemberDescription memberDescription) {}
 }
