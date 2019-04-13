@@ -18,13 +18,7 @@ import ru.rrr.tcp.TcpServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +26,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class Node {
-	private final String uuid = UUID.randomUUID().toString();
+	private final String uuid;
 	private final ScheduledExecutorService discoverExecutor = Executors.newScheduledThreadPool(1);
 	private final int sendMessageTimeout;
 	private TcpServer server;
@@ -42,7 +36,12 @@ public class Node {
 	private int port;
 	private String clusterName;
 
-	public Node(NodeConfig config) throws NodeConfigException, IOException {
+	public Node(NodeConfig config) throws IOException, NodeConfigException {
+		this(config, UUID.randomUUID().toString());
+	}
+
+	public Node(NodeConfig config, String uuid) throws NodeConfigException, IOException {
+		this.uuid = uuid;
 		this.port = config.getPort();
 		this.clusterName = config.getClusterName();
 
@@ -50,9 +49,9 @@ public class Node {
 
 		this.sendMessageTimeout = config.getSendMessageTimeout();
 
-		log.info("Node [{}]. Start in cluster '{}'", uuid, clusterName);
+		log.info("Node [{}]. Start in cluster '{}'", this.uuid, clusterName);
 
-		this.server = new TcpServer(port, uuid, clusterName);
+		this.server = new TcpServer(port, this.uuid, clusterName);
 		this.port = server.getPort();
 
 		final Collection<NodeUri> members = config.getMembers();
@@ -168,7 +167,7 @@ public class Node {
 	 */
 	private void closeSelfConnection(TcpClient client) throws NetworkExchangeException {
 		// Закрываем соединение с самим собой
-		log.info("Node [{}] found itself. This connection will be closed.", uuid);
+		log.debug("Node [{}] found itself. This connection will be closed.", uuid);
 		client.sendMessage(new Message(MessageType.CLOSE_CONNECTION), Const.SEND_MESSAGE_TIMEOUT);
 		if (client.isConnected()) {
 			client.close();
@@ -209,11 +208,11 @@ public class Node {
 	private String getLocalHostAddress() {
 		String address = null;
 		try {
-			address = InetAddress.getLocalHost().getHostName();
+			address = InetAddress.getLocalHost().getHostAddress();
 		} catch (UnknownHostException e) {
 			log.error("Could not find the IP-address of the local machine", e);
 		}
-		return address;
+        return Optional.ofNullable(address).orElse("localhost");
 	}
 
 	/**
@@ -223,14 +222,35 @@ public class Node {
 		StringBuilder message = new StringBuilder("Node [" + uuid + "]. members: [\n");
 		List<String> membersList = new ArrayList<>();
 		// TODO: 02.04.2019 this.address == null, пока нода сама себя не обнаружит. Надо решить эту проблему.
-		membersList.add(String.format("uuid: %s\t[%s:%d]\t-\tthis", uuid, this.address, this.port));
+        membersList.add(String.format("uuid: %s\t[%s:%d]\t-\tthis", uuid,
+                Optional.ofNullable(this.address).orElse(getLocalHostAddress()), this.port));
 		clients.forEach((uuid, client) -> membersList
 				.add(String.format("uuid: %s\t[%s:%d]", uuid, client.getHost(), client.getPort())));
 
-		final String join = String.join(",\n", membersList);
+		final String join = String.join("\n", membersList);
 
 		message.append(join).append("\n]");
 
 		log.info(message.toString());
+	}
+
+	/**
+	 * Останавливает ноду
+	 *
+	 * @throws IOException
+	 */
+	public void stop() throws IOException {
+		log.info("Node [{}]. Attempting to stop node [{}:{}]", this.uuid, this.address, this.port);
+		this.server.close();
+		this.clients.values().forEach(TcpClient::close);
+	}
+
+	/**
+	 * Возвращает признак остановленной ноды
+	 *
+	 * @return boolean true - если нода остановлена, false - в обратном случае
+	 */
+	public boolean isStopped() {
+		return this.server.isStopped() && this.clients.values().stream().noneMatch(TcpClient::isConnected);
 	}
 }

@@ -1,6 +1,7 @@
 package ru.rrr;
 
 import lombok.extern.slf4j.Slf4j;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import ru.rrr.cfg.NodeConfig;
@@ -20,8 +21,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertTrue;
 
@@ -29,7 +30,12 @@ import static org.junit.Assert.assertTrue;
  * Unit test for simple App.
  */
 @Slf4j
-public class AppTest {
+public class AppTest extends AbstractTest {
+    @BeforeClass
+    public static void initClass() {
+        System.setProperty("logback.configurationFile", "F:\\Java\\Cluster\\JCluster\\src\\test\\resources\\log4j.xml");
+    }
+
     /**
      * Rigorous Test :-)
      */
@@ -45,11 +51,8 @@ public class AppTest {
     @Test(timeout = 15000)
     public void testStartCluster() throws IOException, NodeConfigException, InterruptedException {
         final NodeConfig nodeConfig = new NodeConfig("cfg/ClusterConfig.properties");
-
-        CountDownLatch latch = new CountDownLatch(9);
-
-        ClusterEventListener clusterEventListener = new ClusterEventListener() {
-
+        CountDownLatch latch1 = new CountDownLatch(4);
+        ClusterEventListener clusterEventListener1 = new ClusterEventListener() {
             @Override
             public void onClusterEvent(ClusterEvent event) {
 
@@ -57,20 +60,79 @@ public class AppTest {
 
             @Override
             public void onMemberAdd(MemberDescription memberDescription) {
-                latch.countDown();
+                latch1.countDown();
+            }
+        };
+        final Node node1 = new Node(nodeConfig, "c1_node1");
+        node1.addClusterEventListener(clusterEventListener1);
+        final Node node2 = new Node(nodeConfig, "c1_node2");
+        node2.addClusterEventListener(clusterEventListener1);
+
+        latch1.await(5, TimeUnit.SECONDS);
+
+        // Запуск кластера №2
+        final NodeConfig nodeConfig2 = new NodeConfig("cfg/ClusterConfig_2.properties");
+        CountDownLatch latch2 = new CountDownLatch(4);
+        final ClusterEventListener clusterEventListener2 = new ClusterEventListener() {
+            @Override
+            public void onClusterEvent(ClusterEvent event) {
+
+            }
+
+            @Override
+            public void onMemberAdd(MemberDescription memberDescription) {
+                latch2.countDown();
             }
         };
 
-        final Node node1 = new Node(nodeConfig);
-        node1.addClusterEventListener(clusterEventListener);
-        final Node node2 = new Node(nodeConfig);
-        node2.addClusterEventListener(clusterEventListener);
-        final Node node3 = new Node(nodeConfig);
-        node3.addClusterEventListener(clusterEventListener);
+        final Node node3 = new Node(nodeConfig2, "c2_node3");
+        node3.addClusterEventListener(clusterEventListener2);
+        final Node node4 = new Node(nodeConfig2, "c2_node4");
+        node4.addClusterEventListener(clusterEventListener2);
 
-        // TODO: 02.04.2019 Добавить ноды из другого кластера и проверить, что все ноды правильно нашли свои кластеры
+        latch2.await(5, TimeUnit.SECONDS);
+    }
 
-        latch.await(5, TimeUnit.SECONDS);
+    /**
+     * Тест ухода ноды из кластера и ее возвращение
+     */
+    @Ignore
+    @Test
+    public void testAddAndRemoveNode() throws IOException, NodeConfigException, InterruptedException, TimeoutException {
+        final NodeConfig nodeConfig = new NodeConfig("cfg/ClusterConfig.properties");
+        CountDownLatch addLatch = new CountDownLatch(9);
+        final CountDownLatch removeLatch = new CountDownLatch(2);
+        ClusterEventListener clusterEventListener1 = new ClusterEventListener() {
+            @Override
+            public void onClusterEvent(ClusterEvent event) {
+
+            }
+
+            @Override
+            public void onMemberAdd(MemberDescription memberDescription) {
+                addLatch.countDown();
+            }
+
+            @Override
+            public void onMemberRemove(MemberDescription memberDescription) {
+                removeLatch.countDown();
+            }
+        };
+        final Node node1 = new Node(nodeConfig, "c1_node1");
+        node1.addClusterEventListener(clusterEventListener1);
+        final Node node2 = new Node(nodeConfig, "c1_node2");
+        node2.addClusterEventListener(clusterEventListener1);
+        final Node node3 = new Node(nodeConfig, "c1_node3");
+        node3.addClusterEventListener(clusterEventListener1);
+
+        // Ждем, пока все ноды найдут друг друга
+        addLatch.await(5, TimeUnit.SECONDS);
+
+        node2.stop();
+
+        waitFor(node2::isStopped, 15, TimeUnit.SECONDS);
+
+        removeLatch.await(5, TimeUnit.SECONDS);
     }
 
     @Ignore

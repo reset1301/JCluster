@@ -29,6 +29,7 @@ public class TcpServer implements AutoCloseable {
     private final String clusterName;
 
     private final AtomicBoolean isRunning = new AtomicBoolean();
+    private ServerSocket serverSocket;
 
     /**
      * Конструктор
@@ -65,7 +66,7 @@ public class TcpServer implements AutoCloseable {
      * @param port порт серверного сокета
      */
     private void startServer(int port) throws IOException {
-        final ServerSocket serverSocket = createServerSocket(port);
+        serverSocket = createServerSocket(port);
         this.isRunning.set(true);
         log.info("Node [{}]. Start server on port {} in cluster '{}'", uuid, serverSocket.getLocalPort(), clusterName);
         final Thread thread = new Thread(() -> {
@@ -79,6 +80,11 @@ public class TcpServer implements AutoCloseable {
                 } catch (IOException e) {
                     log.warn("Node [{}]. Can't accept", uuid);
                 }
+            }
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                log.error("Error closing server socket", e);
             }
         });
 
@@ -99,7 +105,7 @@ public class TcpServer implements AutoCloseable {
                 this.port = currentPort;
                 return serverSocket;
             } catch (IOException e) {
-                log.info("Node [{}]. Port {} is already busy", uuid, currentPort);
+                log.debug("Node [{}]. Port {} is already busy", uuid, currentPort);
             }
         }
 
@@ -119,10 +125,10 @@ public class TcpServer implements AutoCloseable {
             while (isRunning.get()) {
                 try {
                     Message message = connection.receive();
-                    log.info("Node [{}]. Server received message: '{}'", uuid, message);
+                    log.debug("Node [{}]. Server received message: '{}'", uuid, message);
                     Message response = handleMessage(message);
                     connection.send(response);
-                    log.info("Node [{}]. Server sends message: '{}'", uuid, response);
+                    log.debug("Node [{}]. Server sends message: '{}'", uuid, response);
                     if (Objects.equals(message.getType(), MessageType.CLOSE_CONNECTION)) {
                         log.info("Received a message about closing the connection from the client {}:{}", host, port);
                         break;
@@ -147,8 +153,8 @@ public class TcpServer implements AutoCloseable {
      * @param message сообщение от клиента
      * @return String ответ
      */
-    public Message handleMessage(Message message) {
-        log.info("Node [{}]. Calling the '{}' method on the server", uuid, message.getType());
+    private Message handleMessage(Message message) {
+        log.debug("Node [{}]. Calling the '{}' method on the server", uuid, message.getType());
         switch (message.getType()) {
             case GET_UUID:
                 return new Message(MessageType.GET_UUID, this.uuid);
@@ -159,8 +165,23 @@ public class TcpServer implements AutoCloseable {
         }
     }
 
+    public boolean stop() {
+        try {
+            close();
+        } catch (IOException e) {
+            log.error("Error stopping TCP server", e);
+            return false;
+        }
+        return true;
+    }
+
     @Override
-    public void close() {
+    public void close() throws IOException {
         this.isRunning.set(false);
+        this.serverSocket.close();
+    }
+
+    public boolean isStopped() {
+        return !this.isRunning.get() && this.serverSocket.isClosed();
     }
 }

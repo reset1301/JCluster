@@ -49,7 +49,7 @@ public class TcpClient implements AutoCloseable {
      *
      * @return connection
      */
-    public Connection connect() throws IOException {
+    private Connection connect() throws IOException {
         log.debug("Node [{}]. Attempt to connect to server {}:{}", uuid, host, port);
         Socket socket = new Socket(host, port);
         Connection result = new Connection(socket);
@@ -70,7 +70,7 @@ public class TcpClient implements AutoCloseable {
     }
 
     private Message sendMessageImpl(Message message) throws IOException, ClassNotFoundException {
-        log.info("Node [{}]. Client sends message: '{}'", uuid, message);
+        log.debug("Node [{}]. Client sends message: '{}'", uuid, message);
 
         connection.send(message);
 
